@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
+pydantic
+pydantic-settings
+python-dotenv
+numpy
+scipy
+mne
+autoreject
+httpx
