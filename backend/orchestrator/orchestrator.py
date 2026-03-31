@@ -1,21 +1,45 @@
 import asyncio
+import json
+import os
+import logging
 from typing import Callable, Awaitable, Optional
+
+import httpx
 
 from schemas import ChatResponse, EEGFindings
 from orchestrator.state import SessionState
+from orchestrator.prompts import ORCHESTRATOR_SYSTEM_PROMPT
 from agents.eeg_cleaner.cleaner import clean_eeg
 from agents.labram.encoder import encode_eeg
 from agents.labram.head_cognitive import classify_cognitive_state
 from agents.labram.head_neurological import detect_neurological_patterns
-from agents.labram.findings import assemble_findings
+from agents.labram.findings import assemble_findings, findings_to_text
 from agents.report_generator.generator import generate_report
+
+logger = logging.getLogger(__name__)
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "llama3.1")
 
 
 class Orchestrator:
     def __init__(self):
-        # TODO: initialize model client once hosting is decided
-        # Options: Groq, Together AI, Ollama, HuggingFace Inference Endpoint
-        self.model_client = None
+        self.client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=120.0)
+
+    async def _build_messages(self, state: SessionState) -> list[dict]:
+        messages = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT.strip()}]
+
+        if state.eeg_findings:
+            findings_text = findings_to_text(EEGFindings(**state.eeg_findings))
+            messages.append({
+                "role": "system",
+                "content": f"EEG analysis results for this session:\n{findings_text}",
+            })
+
+        for entry in state.conversation_history:
+            messages.append({"role": entry["role"], "content": entry["content"]})
+
+        return messages
 
     async def run(self, state: SessionState, eeg_bytes: Optional[bytes]) -> ChatResponse:
         findings_obj: Optional[EEGFindings] = None
@@ -31,7 +55,8 @@ class Orchestrator:
             report = generate_report(findings_obj, state.patient_metadata)
             state.last_report = report
 
-        response_text = _build_stub_response(state)
+        messages = await self._build_messages(state)
+        response_text = await self._chat_completion(messages)
         state.conversation_history.append({"role": "assistant", "content": response_text})
 
         return ChatResponse(
@@ -80,28 +105,70 @@ class Orchestrator:
             state.last_report = report
             await _step("report_generation", "completed")
 
-        response_text = _build_stub_response(state)
-        state.conversation_history.append({"role": "assistant", "content": response_text})
+        messages = await self._build_messages(state)
+        full_response = await self._stream_completion(messages, on_token)
+        state.conversation_history.append({"role": "assistant", "content": full_response})
 
-        for word in response_text.split(" "):
-            await on_token(word + " ")
-            await asyncio.sleep(0.05)
+    async def _chat_completion(self, messages: list[dict]) -> str:
+        """Non-streaming completion via Ollama API."""
+        try:
+            resp = await self.client.post("/api/chat", json={
+                "model": ORCHESTRATOR_MODEL,
+                "messages": messages,
+                "stream": False,
+            })
+            resp.raise_for_status()
+            return resp.json()["message"]["content"]
+        except Exception as e:
+            logger.error(f"Ollama chat completion failed: {e}")
+            return _fallback_response(messages)
+
+    async def _stream_completion(
+        self,
+        messages: list[dict],
+        on_token: Callable[[str], Awaitable[None]],
+    ) -> str:
+        """Streaming completion via Ollama API — sends tokens as they arrive."""
+        full_response = ""
+        try:
+            async with self.client.stream("POST", "/api/chat", json={
+                "model": ORCHESTRATOR_MODEL,
+                "messages": messages,
+                "stream": True,
+            }) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line)
+                    token = chunk.get("message", {}).get("content", "")
+                    if token:
+                        full_response += token
+                        await on_token(token)
+                    if chunk.get("done"):
+                        break
+        except Exception as e:
+            logger.error(f"Ollama streaming failed: {e}")
+            if not full_response:
+                full_response = _fallback_response(messages)
+                for word in full_response.split(" "):
+                    await on_token(word + " ")
+                    await asyncio.sleep(0.05)
+        return full_response
 
 
-def _build_stub_response(state: SessionState) -> str:
-    # TODO: replace with real LLM call once model is decided
-    if state.eeg_findings:
-        findings = state.eeg_findings
+def _fallback_response(messages: list[dict]) -> str:
+    """Fallback when Ollama is unreachable — checks if EEG context was injected."""
+    has_eeg = any("EEG analysis results" in m.get("content", "") for m in messages)
+    if has_eeg:
         return (
-            f"Based on the EEG analysis, I'm observing {findings.get('dominant_frequency_shift', 'some frequency changes')}. "
-            f"The cognitive state appears to be {findings.get('cognitive_state', 'unclear')}. "
-            f"The Alzheimer's risk score is {findings.get('ad_risk_score', 0):.2f}, "
-            f"which warrants further clinical evaluation. "
-            f"Notable patterns include: {', '.join(findings.get('notable_patterns', []))}. "
-            f"Please refer to the clinical report for the full interpretation."
+            "I've received the EEG analysis results. However, I'm currently unable to "
+            "connect to the language model for a detailed interpretation. Please check "
+            "that Ollama is running and the llama3.1 model is available, then try again. "
+            "In the meantime, you can review the structured findings and clinical report below."
         )
     return (
-        "I'm ready to analyze EEG data and answer questions about neurological findings. "
-        "You can upload an EEG file along with patient metadata for a full analysis, "
-        "or ask me general questions about EEG interpretation and neurology."
+        "I'm ready to help with EEG interpretation and neurology questions, but I'm "
+        "currently unable to connect to the language model. Please ensure Ollama is "
+        "running on port 11434 with the llama3.1 model loaded."
     )
