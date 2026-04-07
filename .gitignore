@@ -8,6 +8,6 @@ dist/
 data/raw/
 data/processed/
 models/
-*.edf
+ds004504/
 *.fif
 *.set
