@@ -8,7 +8,6 @@ dist/
 data/raw/
 data/processed/
 models/
-*.edf
 *.fif
 *.set
 LaBraM/processed/
