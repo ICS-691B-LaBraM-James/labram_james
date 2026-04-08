@@ -11,3 +11,5 @@ models/
 *.edf
 *.fif
 *.set
+LaBraM/processed/
+.DS_Store
