@@ -3,12 +3,13 @@ import numpy as np
 import torch
 from braindecode.models import Labram
 
-raw = mne.io.read_raw_edf("/Users/kyesteele/dev/labram_james/LaBraM/data/sub-001_task-eyesclosed_eeg.edf", preload=True)
+raw = mne.io.read_raw_edf("/Users/lava/Documents/GitHub/labram_james/LaBraM/data/sub-001_task-eyesclosed_eeg.edf", preload=True)
 raw.pick_types(eeg=True)
 raw.filter(l_freq=0.1, h_freq=75.0)
 raw.notch_filter(freqs=50)
 raw.resample(200)
 
+ch_names = raw.ch_names
 data = raw.get_data() * 1e6
 window = 1600
 segments = []
@@ -82,7 +83,7 @@ all_probs = []
 all_band_powers = []
 
 with torch.no_grad():
-    output = model(segments)
+    output = model(segments, ch_names=ch_names)
     probs = torch.softmax(output, dim=-1)
     all_probs = probs.numpy()
 
