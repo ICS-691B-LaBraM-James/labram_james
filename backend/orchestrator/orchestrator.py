@@ -6,6 +6,8 @@ from typing import Callable, Awaitable, Optional
 
 import httpx
 
+from agents.labram.pipeline import run_labram_pipeline
+
 from schemas import ChatResponse, EEGFindings
 from orchestrator.state import SessionState
 from orchestrator.prompts import ORCHESTRATOR_SYSTEM_PROMPT
@@ -26,6 +28,10 @@ class Orchestrator:
     def __init__(self):
         self.client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=120.0)
 
+    def process_eeg(self, filepath):
+        result = run_labram_pipeline(filepath)
+        return result
+
     async def _build_messages(self, state: SessionState) -> list[dict]:
         messages = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT.strip()}]
 
@@ -41,27 +47,37 @@ class Orchestrator:
 
         return messages
 
-    async def run(self, state: SessionState, eeg_bytes: Optional[bytes]) -> ChatResponse:
-        findings_obj: Optional[EEGFindings] = None
+    async def run(self, state: SessionState, eeg_file_path: Optional[str]) -> ChatResponse:
         report: Optional[str] = None
 
-        if eeg_bytes is not None:
-            cleaned = clean_eeg(eeg_bytes)
-            embeddings = encode_eeg(cleaned)
-            cognitive = classify_cognitive_state(embeddings)
-            neuro = detect_neurological_patterns(embeddings)
-            findings_obj = assemble_findings(cognitive, neuro)
+        if eeg_file_path is not None:
+            from agents.labram.pipeline import run_labram_pipeline
+            from agents.labram.findings import EEGFindings
+            from agents.report_generator.generator import generate_report
+
+            labram_result = run_labram_pipeline(eeg_file_path)
+
+            findings_obj = EEGFindings(
+                cognitive_state=labram_result["label"],
+                confidence=labram_result["confidence"],
+                ad_risk_score=labram_result["alzheimer_rate"],
+            )
+
             state.eeg_findings = findings_obj.model_dump()
+
             report = generate_report(findings_obj, state.patient_metadata)
             state.last_report = report
 
         messages = await self._build_messages(state)
         response_text = await self._chat_completion(messages)
-        state.conversation_history.append({"role": "assistant", "content": response_text})
+
+        state.conversation_history.append({
+            "role": "assistant",
+            "content": response_text
+        })
 
         return ChatResponse(
             response=response_text,
-            findings=findings_obj,
             report=report,
         )
 
@@ -112,13 +128,16 @@ class Orchestrator:
     async def _chat_completion(self, messages: list[dict]) -> str:
         """Non-streaming completion via Ollama API."""
         try:
-            resp = await self.client.post("/api/chat", json={
+            prompt = "\n".join([m["content"] for m in messages])
+
+            resp = await self.client.post("/api/generate", json={
                 "model": ORCHESTRATOR_MODEL,
-                "messages": messages,
+                "prompt": prompt,
                 "stream": False,
             })
+
             resp.raise_for_status()
-            return resp.json()["message"]["content"]
+            return resp.json()["response"]
         except Exception as e:
             logger.error(f"Ollama chat completion failed: {e}")
             return _fallback_response(messages)
@@ -131,9 +150,11 @@ class Orchestrator:
         """Streaming completion via Ollama API — sends tokens as they arrive."""
         full_response = ""
         try:
-            async with self.client.stream("POST", "/api/chat", json={
+            prompt = "\n".join([m["content"] for m in messages])
+
+            async with self.client.stream("POST", "/api/generate", json={
                 "model": ORCHESTRATOR_MODEL,
-                "messages": messages,
+                "prompt": prompt,
                 "stream": True,
             }) as resp:
                 resp.raise_for_status()
@@ -141,7 +162,7 @@ class Orchestrator:
                     if not line.strip():
                         continue
                     chunk = json.loads(line)
-                    token = chunk.get("message", {}).get("content", "")
+                    token = chunk.get("response", "")
                     if token:
                         full_response += token
                         await on_token(token)
