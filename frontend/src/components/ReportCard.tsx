@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import MarkdownContent from './MarkdownContent'
 
 interface Props {
   report: string
@@ -47,9 +48,7 @@ function ReportCard({ report }: Props) {
 
       {expanded && (
         <div className="px-4 pb-4 pt-1">
-          <pre className="text-xs text-white/60 whitespace-pre-wrap font-mono leading-relaxed">
-            {report}
-          </pre>
+          <MarkdownContent className="text-white/60">{report}</MarkdownContent>
         </div>
       )}
     </div>
