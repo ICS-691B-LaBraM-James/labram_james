@@ -6,9 +6,7 @@ from typing import Callable, Awaitable, Optional
 
 import httpx
 
-from agents.labram.pipeline import run_labram_pipeline
-
-from schemas import ChatResponse, EEGFindings
+from schemas import ChatResponse, EEGFindings, BandPower
 from orchestrator.state import SessionState
 from orchestrator.prompts import ORCHESTRATOR_SYSTEM_PROMPT
 from agents.eeg_cleaner.cleaner import clean_eeg
@@ -17,6 +15,7 @@ from agents.labram.head_cognitive import classify_cognitive_state
 from agents.labram.head_neurological import detect_neurological_patterns
 from agents.labram.findings import assemble_findings, findings_to_text
 from agents.report_generator.generator import generate_report
+from agents.lead.predict_ensemble import run_inference_on_edf
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +27,26 @@ class Orchestrator:
     def __init__(self):
         self.client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=120.0)
 
-    def process_eeg(self, filepath):
-        result = run_labram_pipeline(filepath)
-        return result
-
     async def _build_messages(self, state: SessionState) -> list[dict]:
         messages = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT.strip()}]
 
         if state.eeg_findings:
-            findings_text = findings_to_text(EEGFindings(**state.eeg_findings))
             messages.append({
                 "role": "system",
-                "content": f"EEG analysis results for this session:\n{findings_text}",
+                "content": f"""
+EEG STRUCTURED DATA:
+{json.dumps(state.eeg_findings, indent=2)}
+
+You must base your reasoning on this data.
+"""
+            })
+            print(json.dumps(state.eeg_findings, indent=2))
+            logger.error(json.dumps(state.eeg_findings, indent=2))
+
+        if getattr(state, "raw_pipeline_output", None):
+            messages.append({
+                "role": "system",
+                "content": f"Raw EEG pipeline output:\n{json.dumps(state.raw_pipeline_output)}"
             })
 
         for entry in state.conversation_history:
@@ -47,24 +54,55 @@ class Orchestrator:
 
         return messages
 
+    def process_eeg(self, filepath):
+        return run_inference_on_edf(
+            edf_path=filepath,
+            checkpoint_root=os.getenv("CHECKPOINT_ROOT", "./checkpoints"),
+            seed_folders=os.getenv("SEED_FOLDERS", "seed41,seed43,seed44"),
+            device=os.getenv("DEVICE", "cuda"),
+        )
+
+    def leadv2_to_findings(self, result: dict) -> EEGFindings:
+        probs = result["subject_prob"]
+        label = int(result["subject_label"][0])
+
+        cognitive_state = "impaired" if label == 1 else "normal"
+
+        patterns = [
+            f"HC probability: {probs[0]:.3f}",
+            f"AD probability: {probs[1]:.3f}",
+        ]
+
+        return EEGFindings(
+            cognitive_state=cognitive_state,
+            confidence=float(probs[label]),
+            model_output={
+                "hc_probability": float(probs[0]),
+                "ad_probability": float(probs[1]),
+            },
+            biomarkers={},
+            band_power={},
+            dominant_frequency_shift="unknown",
+            notable_patterns=patterns,
+        )
+
     async def run(self, state: SessionState, eeg_file_path: Optional[str]) -> ChatResponse:
         report: Optional[str] = None
 
         if eeg_file_path is not None:
-            from agents.labram.pipeline import run_labram_pipeline
-            from agents.labram.findings import EEGFindings
-            from agents.report_generator.generator import generate_report
-
-            labram_result = run_labram_pipeline(eeg_file_path)
-
-            findings_obj = EEGFindings(
-                cognitive_state=labram_result["label"],
-                confidence=labram_result["confidence"],
-                ad_risk_score=labram_result["alzheimer_rate"],
+            result = run_inference_on_edf(
+                edf_path=eeg_file_path,
+                checkpoint_root=os.getenv("CHECKPOINT_ROOT", "./checkpoints"),
+                seed_folders=os.getenv("SEED_FOLDERS", "seed41,seed43,seed44"),
+                device=os.getenv("DEVICE", "cuda"),
             )
 
-            state.eeg_findings = findings_obj.model_dump()
+            findings_obj = self.leadv2_to_findings(result)
 
+            state.eeg_findings = findings_obj.model_dump()
+            state.raw_pipeline_output = result
+
+            logger.error(json.dumps(state.eeg_findings, indent=2))
             report = generate_report(findings_obj, state.patient_metadata)
             state.last_report = report
 
@@ -78,6 +116,7 @@ class Orchestrator:
 
         return ChatResponse(
             response=response_text,
+            findings=EEGFindings(**state.eeg_findings) if state.eeg_findings else None,
             report=report,
         )
 
@@ -94,27 +133,35 @@ class Orchestrator:
         async def _step(step: str, status: str):
             if on_step:
                 await on_step(step, status)
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.1)
 
         if eeg_bytes is not None:
-            await _step("eeg_cleaning", "in_progress")
-            cleaned = clean_eeg(eeg_bytes)
-            await _step("eeg_cleaning", "completed")
+            await _step("eeg_processing", "in_progress")
 
-            await _step("labram_encoding", "in_progress")
-            embeddings = encode_eeg(cleaned)
-            await _step("labram_encoding", "completed")
+            def _run():
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".edf") as tmp:
+                    tmp.write(eeg_bytes)
+                    return tmp.name
 
-            await _step("cognitive_classification", "in_progress")
-            cognitive = classify_cognitive_state(embeddings)
-            await _step("cognitive_classification", "completed")
+            filepath = await asyncio.to_thread(_run)
 
-            await _step("neurological_detection", "in_progress")
-            neuro = detect_neurological_patterns(embeddings)
-            await _step("neurological_detection", "completed")
+            result = await asyncio.to_thread(
+                run_inference_on_edf,
+                filepath,
+                os.getenv("CHECKPOINT_ROOT", "./checkpoints"),
+                os.getenv("SEED_FOLDERS", "seed41,seed43,seed44"),
+                os.getenv("DEVICE", "cuda"),
+            )
 
-            findings_obj = assemble_findings(cognitive, neuro)
+            findings_obj = self.leadv2_to_findings(result)
+
             state.eeg_findings = findings_obj.model_dump()
+            state.raw_pipeline_output = result
+
+            logger.error(json.dumps(state.eeg_findings, indent=2))
+
+            await _step("eeg_processing", "completed")
 
             await _step("report_generation", "in_progress")
             report = generate_report(findings_obj, state.patient_metadata)
@@ -126,7 +173,6 @@ class Orchestrator:
         state.conversation_history.append({"role": "assistant", "content": full_response})
 
     async def _chat_completion(self, messages: list[dict]) -> str:
-        """Non-streaming completion via Ollama API."""
         try:
             prompt = "\n".join([m["content"] for m in messages])
 
@@ -147,7 +193,6 @@ class Orchestrator:
         messages: list[dict],
         on_token: Callable[[str], Awaitable[None]],
     ) -> str:
-        """Streaming completion via Ollama API — sends tokens as they arrive."""
         full_response = ""
         try:
             prompt = "\n".join([m["content"] for m in messages])
@@ -179,8 +224,7 @@ class Orchestrator:
 
 
 def _fallback_response(messages: list[dict]) -> str:
-    """Fallback when Ollama is unreachable — checks if EEG context was injected."""
-    has_eeg = any("EEG analysis results" in m.get("content", "") for m in messages)
+    has_eeg = any("EEG" in m.get("content", "") for m in messages)
     if has_eeg:
         return (
             "I've received the EEG analysis results. However, I'm currently unable to "
