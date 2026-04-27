@@ -1,7 +1,13 @@
 import argparse
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Sequence, Tuple
+
+# Make the vendored LEAD repo (at <project_root>/LEAD/) importable.
+_LEAD_ROOT = Path(__file__).resolve().parents[3] / "LEAD"
+if str(_LEAD_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LEAD_ROOT))
 
 import mne
 import numpy as np

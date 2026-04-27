@@ -10,11 +10,12 @@ class PatientMetadata(BaseModel):
 
 
 class BandPower(BaseModel):
-    delta: str = "normal"
-    theta: str = "normal"
-    alpha: str = "normal"
-    beta: str = "normal"
-    gamma: str = "normal"
+    """Relative band power (fraction of total spectral power, 0-1)."""
+    delta: float
+    theta: float
+    alpha: float
+    beta: float
+    gamma: float
 
 
 class EEGFindings(BaseModel):

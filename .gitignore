@@ -7,8 +7,9 @@ dist/
 .vite/
 data/raw/
 data/processed/
-models/
+/models/
 *.fif
 *.set
 LaBraM/processed/
+LEAD/checkpoints/
 .DS_Store

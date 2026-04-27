@@ -1,16 +1,34 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { Message, EEGFindings, PipelineStep } from '../types'
 
 const STEP_LABELS: Record<string, string> = {
-  eeg_cleaning: 'Cleaning EEG data',
-  labram_encoding: 'Encoding with LaBraM',
-  cognitive_classification: 'Classifying cognitive state',
-  neurological_detection: 'Detecting neurological patterns',
+  eeg_processing: 'Processing EEG',
   report_generation: 'Generating clinical report',
 }
 
+const STORAGE_KEY = 'eeg-interpreter:messages'
+
+function loadStoredMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as Array<Omit<Message, 'timestamp'> & { timestamp: string }>
+    return parsed.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }))
+  } catch {
+    return []
+  }
+}
+
 export function useChat() {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(loadStoredMessages)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+    } catch {
+      // quota exceeded or storage unavailable; ignore
+    }
+  }, [messages])
 
   const addMessage = useCallback((role: 'user' | 'assistant', content: string) => {
     const msg: Message = {
