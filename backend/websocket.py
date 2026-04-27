@@ -53,8 +53,10 @@ async def stream(ws: WebSocket):
         state.has_eeg = has_eeg
         state.conversation_history.append({"role": "user", "content": message})
 
-        # FILE PATH FLOW (correct approach)
-        file_path = data.get("file_path")
+        # Frontend sends raw EDF bytes as a second binary frame when has_eeg is true.
+        eeg_bytes: bytes | None = None
+        if has_eeg:
+            eeg_bytes = await ws.receive_bytes()
 
         async def send_token(token: str):
             await safe_send({"type": "token", "content": token})
@@ -64,7 +66,7 @@ async def stream(ws: WebSocket):
 
         await orchestrator.stream_response(
             state,
-            file_path,
+            eeg_bytes,
             send_token,
             send_step
         )

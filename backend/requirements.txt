@@ -10,3 +10,9 @@ scipy
 mne
 autoreject
 httpx
+# LEADv2 inference deps
+torch
+einops
+scikit-learn
+pandas
+reformer-pytorch

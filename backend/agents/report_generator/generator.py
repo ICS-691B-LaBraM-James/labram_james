@@ -9,29 +9,37 @@ from agents.report_generator.prompts import REPORT_SYSTEM_PROMPT, REPORT_USER_TE
 logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-REPORT_MODEL = os.getenv("REPORT_MODEL", "meditron")
+REPORT_MODEL = os.getenv("REPORT_MODEL", "llama3.1")
 
 
-def generate_report(findings: EEGFindings, patient_metadata: dict) -> str:
+def generate_report(
+    findings: EEGFindings,
+    patient_metadata: dict,
+    features: dict | None = None,
+    user_notes: str = "",
+) -> str:
     print(f"[Report Generator] Generating report via {REPORT_MODEL}...")
 
+    features = features or {}
+    ad_label = "AD" if findings.cognitive_state == "impaired" else "HC"
+    notes = features.get("notes") or "; ".join(findings.notable_patterns)
+
     user_prompt = REPORT_USER_TEMPLATE.format(
-        age=patient_metadata.get("age", "unknown"),
-        sex=patient_metadata.get("sex", "unknown"),
-        symptoms=patient_metadata.get("symptoms", "not provided"),
-        history=patient_metadata.get("history", "not provided"),
-        cognitive_state=findings.cognitive_state,
-        emotional_state=findings.emotional_state,
-        dominant_frequency_shift=findings.dominant_frequency_shift,
-        delta=findings.band_power.delta,
-        theta=findings.band_power.theta,
-        alpha=findings.band_power.alpha,
-        beta=findings.band_power.beta,
-        gamma=findings.band_power.gamma,
-        ad_risk_score=findings.ad_risk_score,
-        seizure_risk=findings.seizure_risk,
-        confidence=findings.confidence,
-        notable_patterns="; ".join(findings.notable_patterns),
+        age=patient_metadata.get("age") or "not provided",
+        sex=patient_metadata.get("sex") or "not provided",
+        symptoms=patient_metadata.get("symptoms") or "not provided",
+        history=patient_metadata.get("history") or "not provided",
+        user_notes=user_notes.strip() or "(none provided)",
+        ad_probability=findings.ad_risk_score,
+        ad_label=ad_label,
+        stability_index=features.get("stability_index", 0.0),
+        delta=features.get("delta", 0.0),
+        theta=features.get("theta", 0.0),
+        alpha=features.get("alpha", 0.0),
+        beta=features.get("beta", 0.0),
+        gamma=features.get("gamma", 0.0),
+        theta_alpha_ratio=features.get("theta_alpha_ratio", 0.0),
+        notes=notes,
     )
 
     try:
@@ -52,7 +60,7 @@ def generate_report(findings: EEGFindings, patient_metadata: dict) -> str:
 
 
 def _fallback_report(findings: EEGFindings, patient_metadata: dict) -> str:
-    """Static fallback when Ollama/meditron is unreachable."""
+    """Static fallback when Ollama is unreachable."""
     age = patient_metadata.get("age", "unknown")
     sex = patient_metadata.get("sex", "unknown")
     bp = findings.band_power
@@ -60,8 +68,8 @@ def _fallback_report(findings: EEGFindings, patient_metadata: dict) -> str:
         f"EEG Interpretation Report\n"
         f"========================\n"
         f"Patient: {age}y {sex}\n\n"
-        f"NOTE: This is a fallback report generated without the medical LLM. "
-        f"Ensure Ollama is running with the meditron model for full reports.\n\n"
+        f"NOTE: This is a fallback report generated without the LLM. "
+        f"Ensure Ollama is running with the llama3.1 model for full reports.\n\n"
         f"Summary of Findings:\n"
         f"- Dominant frequency shift: {findings.dominant_frequency_shift}\n"
         f"- Cognitive state: {findings.cognitive_state}\n"
