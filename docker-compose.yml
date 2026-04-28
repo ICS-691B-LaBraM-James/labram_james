@@ -17,7 +17,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./LEAD:/app/LEAD
+      - ./third_party/LEAD:/app/third_party/LEAD
       - ./data:/app/data
     env_file:
       - .env

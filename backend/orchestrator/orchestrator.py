@@ -29,7 +29,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _resolve_checkpoint_root() -> str:
-    default_root = _PROJECT_ROOT / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-ADFTD-AD-vs-HC"
+    default_root = _PROJECT_ROOT / "third_party" / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-ADFTD-AD-vs-HC"
     configured = os.getenv("CHECKPOINT_ROOT")
 
     if not configured:
@@ -39,9 +39,18 @@ def _resolve_checkpoint_root() -> str:
     if configured_path.exists():
         return str(configured_path)
 
-    # Backward compatibility: older setups used /LEAD/... inside Docker.
+    # Backward compatibility: older setups used /LEAD/... or /app/LEAD/... inside Docker.
     if configured.startswith("/LEAD/"):
         docker_path = Path("/app") / configured_path.relative_to("/")
+        if docker_path.exists():
+            logger.warning(
+                "CHECKPOINT_ROOT '%s' not found; using '%s' instead",
+                configured,
+                str(docker_path),
+            )
+            return str(docker_path)
+    if configured.startswith("/app/LEAD/"):
+        docker_path = Path("/app/third_party/LEAD") / configured_path.relative_to("/app/LEAD")
         if docker_path.exists():
             logger.warning(
                 "CHECKPOINT_ROOT '%s' not found; using '%s' instead",

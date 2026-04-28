@@ -3,6 +3,7 @@
 import mne
 import numpy as np
 import torch
+from pathlib import Path
 from braindecode.models import Labram
 
 torch.serialization.add_safe_globals([np.float64, np.float32])
@@ -115,7 +116,13 @@ def run_labram_pipeline(filepath: str):
         n_times=1600
     )
 
-    checkpoint_path = "/Users/kyesteele/dev/labram_james/LaBraM/checkpoints/labram-base.pth"
+    checkpoint_path = str(
+        Path(__file__).resolve().parents[3]
+        / "third_party"
+        / "LaBraM"
+        / "checkpoints"
+        / "labram-base.pth"
+    )
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
     if isinstance(checkpoint, dict):

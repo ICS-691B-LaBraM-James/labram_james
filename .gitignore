@@ -9,5 +9,5 @@ data/raw/
 data/processed/
 *.fif
 *.set
-LaBraM/processed/
+third_party/LaBraM/processed/
 .DS_Store
