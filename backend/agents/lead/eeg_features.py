@@ -48,7 +48,9 @@ def compute_eeg_features(edf_path: str, target_fs: int = 200) -> dict:
     abs_power: dict[str, float] = {}
     for name, (lo, hi) in _BANDS.items():
         idx = np.where((freqs >= lo) & (freqs < hi))[0]
-        abs_power[name] = float(psd[:, idx].mean()) if len(idx) else 0.0
+        # Sum PSD bins within band (= ∫PSD df ≈ total band energy per channel),
+        # then average across channels. Standard clinical formulation.
+        abs_power[name] = float(psd[:, idx].mean(axis=0).sum()) if len(idx) else 0.0
 
     total = sum(abs_power.values()) + 1e-8
     rel = {k: v / total for k, v in abs_power.items()}

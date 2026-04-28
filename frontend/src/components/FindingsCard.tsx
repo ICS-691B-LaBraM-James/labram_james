@@ -54,18 +54,25 @@ function FindingsCard({ findings }: Props) {
           </div>
 
           <div>
-            <span className="text-white/40">Relative Band Power</span>
+            <div className="flex items-baseline justify-between">
+              <span className="text-white/40">Relative Band Power</span>
+              <span className="text-[10px] text-white/30">log scale</span>
+            </div>
             <div className="mt-1.5 space-y-1.5">
               {(['delta', 'theta', 'alpha', 'beta', 'gamma'] as const).map((band) => {
                 const value = findings.band_power[band]
                 const pct = typeof value === 'number' ? value * 100 : 0
+                // Log-scale bar: -30 dB floor → 0%, 0 dB (= 100% of total) → 100%
+                const FLOOR_DB = -30
+                const dB = pct > 0 ? 10 * Math.log10(pct / 100) : FLOOR_DB
+                const barWidth = Math.max(0, Math.min(100, ((dB - FLOOR_DB) / -FLOOR_DB) * 100))
                 return (
                   <div key={band} className="flex items-center gap-2">
                     <span className="text-white/50 capitalize w-12 shrink-0">{band}</span>
                     <div className="flex-1 bg-white/10 rounded-full h-1.5">
                       <div
                         className="bg-emerald-500/70 h-1.5 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
+                        style={{ width: `${barWidth}%` }}
                       />
                     </div>
                     <span className="text-white/60 tabular-nums w-10 text-right">
