@@ -19,6 +19,7 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
     (message: string, file: File | null) => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
+      let finished = false
 
       ws.onopen = () => {
         ws.send(
@@ -51,10 +52,12 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
               onReport(frame.data)
               break
             case 'done':
+              finished = true
               onComplete()
               ws.close()
               break
             case 'error':
+              finished = true
               onError(frame.message)
               ws.close()
               break
@@ -70,6 +73,9 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
 
       ws.onclose = () => {
         wsRef.current = null
+        if (!finished) {
+          onError('Connection closed before completion')
+        }
       }
     },
     [onToken, onStep, onFindings, onReport, onComplete, onError],

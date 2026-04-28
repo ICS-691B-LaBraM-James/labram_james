@@ -241,8 +241,19 @@ You must base your reasoning on this data.
             return
 
         # No EEG attached: fall back to a plain chat reply.
+        # Guard with a timeout so websocket sessions don't hang indefinitely.
         messages = await self._build_messages(state)
-        full_response = await self._stream_completion(messages, on_token)
+        try:
+            full_response = await asyncio.wait_for(
+                self._stream_completion(messages, on_token),
+                timeout=45.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Ollama streaming timed out after 45s")
+            full_response = _fallback_response(messages)
+            for word in full_response.split(" "):
+                await on_token(word + " ")
+                await asyncio.sleep(0.05)
         state.conversation_history.append({"role": "assistant", "content": full_response})
 
     async def _chat_completion(self, messages: list[dict]) -> str:
