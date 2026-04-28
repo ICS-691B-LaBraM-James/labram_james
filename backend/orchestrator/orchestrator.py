@@ -24,11 +24,41 @@ logger = logging.getLogger(__name__)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "llama3.1")
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-LEAD_CHECKPOINT_ROOT = os.getenv(
-    "CHECKPOINT_ROOT",
-    str(_PROJECT_ROOT / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-ADFTD-AD-vs-HC"),
-)
+# /app/orchestrator/orchestrator.py -> parents[1] is /app (project root in container).
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_checkpoint_root() -> str:
+    default_root = _PROJECT_ROOT / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-ADFTD-AD-vs-HC"
+    configured = os.getenv("CHECKPOINT_ROOT")
+
+    if not configured:
+        return str(default_root)
+
+    configured_path = Path(configured)
+    if configured_path.exists():
+        return str(configured_path)
+
+    # Backward compatibility: older setups used /LEAD/... inside Docker.
+    if configured.startswith("/LEAD/"):
+        docker_path = Path("/app") / configured_path.relative_to("/")
+        if docker_path.exists():
+            logger.warning(
+                "CHECKPOINT_ROOT '%s' not found; using '%s' instead",
+                configured,
+                str(docker_path),
+            )
+            return str(docker_path)
+
+    logger.warning(
+        "CHECKPOINT_ROOT '%s' not found; falling back to default '%s'",
+        configured,
+        str(default_root),
+    )
+    return str(default_root)
+
+
+LEAD_CHECKPOINT_ROOT = _resolve_checkpoint_root()
 LEAD_SEED_FOLDERS = os.getenv(
     "SEED_FOLDERS",
     "nh8_el12_dm128_df256_seed41,nh8_el12_dm128_df256_seed43,nh8_el12_dm128_df256_seed44",

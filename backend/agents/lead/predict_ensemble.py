@@ -5,7 +5,8 @@ from types import SimpleNamespace
 from typing import Dict, List, Sequence, Tuple
 
 # Make the vendored LEAD repo (at <project_root>/LEAD/) importable.
-_LEAD_ROOT = Path(__file__).resolve().parents[3] / "LEAD"
+# For /app/agents/lead/predict_ensemble.py, parents[2] is /app.
+_LEAD_ROOT = Path(__file__).resolve().parents[2] / "LEAD"
 if str(_LEAD_ROOT) not in sys.path:
     sys.path.insert(0, str(_LEAD_ROOT))
 

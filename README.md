@@ -8,14 +8,14 @@ An agentic EEG interpretation system that processes raw EEG recordings and produ
 |---|---|---|
 | **EEG Cleaner** | Stub | Preprocesses raw EEG files — bandpass/notch filtering, bad channel interpolation, ICA artifact removal, and epoch extraction using MNE-Python and AutoReject. |
 | **LaBraM Encoder + Heads** | Stub | Encodes cleaned EEG epochs into embeddings via the LaBraM pretrained backbone, then routes them through two fine-tuned classification heads: one for cognitive/emotional state and one for neurological pattern detection (AD risk, seizure risk, band power). |
-| **Report Generator** | Live (meditron) | Takes structured EEG findings and patient metadata and generates a formal clinical interpretation report using meditron via Ollama. |
+| **Report Generator** | Live (llama3.1) | Takes structured EEG findings and patient metadata and generates a formal clinical interpretation report using llama3.1 via Ollama. |
 | **Orchestrator** | Live (llama3.1) | Coordinates the full pipeline, manages conversation state, and streams responses to the frontend via WebSocket. Powered by llama3.1 via Ollama. |
 
 ## Tech Stack
 
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS
 - **Backend:** Python + FastAPI + WebSockets
-- **LLM Inference:** Ollama (local) — llama3.1 + meditron
+- **LLM Inference:** Ollama (local) — llama3.1
 - **Containers:** Docker + Docker Compose
 
 ## Prerequisites
@@ -25,7 +25,6 @@ An agentic EEG interpretation system that processes raw EEG recordings and produ
 
 ```bash
 ollama pull llama3.1
-ollama pull meditron
 ```
 
 3. Verify Ollama is running on port 11434:
@@ -55,7 +54,7 @@ docker compose up --build
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://host.docker.internal:11434` | Ollama server URL (use `http://localhost:11434` when not using Docker) |
 | `ORCHESTRATOR_MODEL` | `llama3.1` | Model for conversational orchestration |
-| `REPORT_MODEL` | `meditron` | Model for clinical report generation |
+| `REPORT_MODEL` | `llama3.1` | Model for clinical report generation |
 | `HUGGINGFACE_TOKEN` | — | For loading LaBraM weights (future) |
 
 ## Agent Integration Checklist
