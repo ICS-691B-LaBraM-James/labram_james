@@ -2,6 +2,7 @@ import type { Message } from '../types'
 import ThinkingBlock from './ThinkingBlock'
 import FindingsCard from './FindingsCard'
 import ReportCard from './ReportCard'
+import MarkdownContent from './MarkdownContent'
 
 interface Props {
   message: Message
@@ -33,7 +34,7 @@ function MessageBubble({ message }: Props) {
       <div className="flex-1 min-w-0">
         {hasSteps && <ThinkingBlock steps={message.steps!} />}
         {hasContent && (
-          <p className="text-sm text-white/85 whitespace-pre-line leading-relaxed">{message.content}</p>
+          <MarkdownContent className="text-white/85">{message.content}</MarkdownContent>
         )}
         {!hasContent && !hasSteps && (
           <div className="flex items-center gap-1.5 h-5">

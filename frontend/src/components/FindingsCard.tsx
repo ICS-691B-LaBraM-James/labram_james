@@ -5,20 +5,6 @@ interface Props {
   findings: EEGFindings
 }
 
-function bandBadge(level: string) {
-  const color =
-    level === 'elevated'
-      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-      : level === 'reduced'
-        ? 'bg-red-500/20 text-red-300 border-red-500/30'
-        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${color}`}>
-      {level}
-    </span>
-  )
-}
-
 function FindingsCard({ findings }: Props) {
   const [expanded, setExpanded] = useState(true)
 
@@ -49,29 +35,52 @@ function FindingsCard({ findings }: Props) {
               <span className="text-white/40">Cognitive State</span>
               <p className="text-white/80 mt-0.5">{findings.cognitive_state}</p>
             </div>
-            <div>
-              <span className="text-white/40">Emotional State</span>
-              <p className="text-white/80 mt-0.5">{findings.emotional_state}</p>
-            </div>
+            {findings.emotional_state !== 'not assessed' && (
+              <div>
+                <span className="text-white/40">Emotional State</span>
+                <p className="text-white/80 mt-0.5">{findings.emotional_state}</p>
+              </div>
+            )}
             <div>
               <span className="text-white/40">Dominant Shift</span>
               <p className="text-white/80 mt-0.5">{findings.dominant_frequency_shift}</p>
             </div>
-            <div>
-              <span className="text-white/40">Seizure Risk</span>
-              <p className="text-white/80 mt-0.5">{findings.seizure_risk}</p>
-            </div>
+            {findings.seizure_risk !== 'not assessed' && (
+              <div>
+                <span className="text-white/40">Seizure Risk</span>
+                <p className="text-white/80 mt-0.5">{findings.seizure_risk}</p>
+              </div>
+            )}
           </div>
 
           <div>
-            <span className="text-white/40">Band Power</span>
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {Object.entries(findings.band_power).map(([band, level]) => (
-                <div key={band} className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2.5 py-1">
-                  <span className="text-white/50 capitalize">{band}</span>
-                  {bandBadge(level)}
-                </div>
-              ))}
+            <div className="flex items-baseline justify-between">
+              <span className="text-white/40">Relative Band Power</span>
+              <span className="text-[10px] text-white/30">log scale</span>
+            </div>
+            <div className="mt-1.5 space-y-1.5">
+              {(['delta', 'theta', 'alpha', 'beta', 'gamma'] as const).map((band) => {
+                const value = findings.band_power[band]
+                const pct = typeof value === 'number' ? value * 100 : 0
+                // Log-scale bar: -30 dB floor → 0%, 0 dB (= 100% of total) → 100%
+                const FLOOR_DB = -30
+                const dB = pct > 0 ? 10 * Math.log10(pct / 100) : FLOOR_DB
+                const barWidth = Math.max(0, Math.min(100, ((dB - FLOOR_DB) / -FLOOR_DB) * 100))
+                return (
+                  <div key={band} className="flex items-center gap-2">
+                    <span className="text-white/50 capitalize w-12 shrink-0">{band}</span>
+                    <div className="flex-1 bg-white/10 rounded-full h-1.5">
+                      <div
+                        className="bg-emerald-500/70 h-1.5 rounded-full transition-all"
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    <span className="text-white/60 tabular-nums w-10 text-right">
+                      {pct.toFixed(1)}%
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

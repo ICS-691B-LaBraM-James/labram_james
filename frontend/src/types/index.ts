@@ -15,11 +15,11 @@ export interface Message {
 }
 
 export interface BandPower {
-  delta: string
-  theta: string
-  alpha: string
-  beta: string
-  gamma: string
+  delta: number
+  theta: number
+  alpha: number
+  beta: number
+  gamma: number
 }
 
 export interface EEGFindings {

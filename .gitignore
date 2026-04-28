@@ -7,7 +7,7 @@ dist/
 .vite/
 data/raw/
 data/processed/
-models/
-*.edf
 *.fif
 *.set
+LaBraM/processed/
+.DS_Store
