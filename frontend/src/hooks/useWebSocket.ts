@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import type { EEGFindings } from '../types'
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws/stream'
+const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://127.0.0.1:8000/ws/stream'
 
 interface UseWebSocketOptions {
   onToken: (token: string) => void

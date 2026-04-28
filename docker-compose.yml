@@ -6,8 +6,8 @@ services:
     volumes:
       - ./frontend/src:/app/src
     environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000/ws/stream
+      - VITE_API_URL=http://127.0.0.1:8000
+      - VITE_WS_URL=ws://127.0.0.1:8000/ws/stream
     depends_on:
       - backend
 
