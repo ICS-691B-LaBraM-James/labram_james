@@ -59,7 +59,7 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
     }
   }, [])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim()
     if (!text || isLoading) return
 
@@ -70,7 +70,8 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-    sendMessage(text, eegFile)
+    const file = eegFile
+    await sendMessage(text, file)
     onFileSelect(null)
   }
 

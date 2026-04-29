@@ -59,13 +59,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint_root",
         type=str,
-        default="./checkpoints/LEADv2/finetune/LEADv2/P-Base-F-ADFTD-AD-vs-HC",
+        default="./checkpoints/LEADv2/finetune/LEADv2/P-Base-F-Merged400-AD-vs-HC",
         help="Root folder containing seed checkpoint subfolders.",
     )
     parser.add_argument(
         "--seed_folders",
         type=str,
-        default="nh8_el12_dm128_df256_seed41,nh8_el12_dm128_df256_seed43,nh8_el12_dm128_df256_seed44",
+        default="nh8_el12_dm128_df256_seed41,nh8_el12_dm128_df256_seed42,nh8_el12_dm128_df256_seed43,nh8_el12_dm128_df256_seed44",
         help="Comma-separated seed folder names to ensemble.",
     )
     parser.add_argument("--batch_size", type=int, default=256, help="Inference batch size over segments.")

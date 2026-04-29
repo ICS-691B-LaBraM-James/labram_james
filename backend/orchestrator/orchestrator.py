@@ -29,7 +29,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _resolve_checkpoint_root() -> str:
-    default_root = _PROJECT_ROOT / "third_party" / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-ADFTD-AD-vs-HC"
+    default_root = _PROJECT_ROOT / "third_party" / "LEAD" / "checkpoints" / "LEADv2" / "finetune" / "LEADv2" / "P-Base-F-Merged400-AD-vs-HC"
     configured = os.getenv("CHECKPOINT_ROOT")
 
     if not configured:
@@ -70,7 +70,7 @@ def _resolve_checkpoint_root() -> str:
 LEAD_CHECKPOINT_ROOT = _resolve_checkpoint_root()
 LEAD_SEED_FOLDERS = os.getenv(
     "SEED_FOLDERS",
-    "nh8_el12_dm128_df256_seed41,nh8_el12_dm128_df256_seed43,nh8_el12_dm128_df256_seed44",
+    "nh8_el12_dm128_df256_seed41,nh8_el12_dm128_df256_seed42,nh8_el12_dm128_df256_seed43,nh8_el12_dm128_df256_seed44",
 )
 LEAD_DEVICE = os.getenv("DEVICE", "cpu")
 
@@ -209,16 +209,22 @@ You must base your reasoning on this data.
 
             filepath = await asyncio.to_thread(_run)
 
-            result, features = await asyncio.gather(
-                asyncio.to_thread(
-                    run_inference_on_edf,
-                    filepath,
-                    LEAD_CHECKPOINT_ROOT,
-                    LEAD_SEED_FOLDERS,
-                    LEAD_DEVICE,
-                ),
-                asyncio.to_thread(compute_eeg_features, filepath),
-            )
+            try:
+                result, features = await asyncio.gather(
+                    asyncio.to_thread(
+                        run_inference_on_edf,
+                        filepath,
+                        LEAD_CHECKPOINT_ROOT,
+                        LEAD_SEED_FOLDERS,
+                        LEAD_DEVICE,
+                    ),
+                    asyncio.to_thread(compute_eeg_features, filepath),
+                )
+            finally:
+                try:
+                    await asyncio.to_thread(os.unlink, filepath)
+                except OSError:
+                    pass
 
             findings_obj = self.leadv2_to_findings(result, features)
 
@@ -230,7 +236,8 @@ You must base your reasoning on this data.
             await _step("eeg_processing", "completed")
 
             await _step("report_generation", "in_progress")
-            report = generate_report(
+            report = await asyncio.to_thread(
+                generate_report,
                 findings_obj,
                 state.patient_metadata,
                 features,
@@ -240,8 +247,7 @@ You must base your reasoning on this data.
             await _step("report_generation", "completed")
             return
 
-        # No EEG attached: fall back to a plain chat reply.
-        # Guard with a timeout so websocket sessions don't hang indefinitely.
+        # No EEG attached: plain chat reply via streamed tokens.
         messages = await self._build_messages(state)
         try:
             full_response = await asyncio.wait_for(

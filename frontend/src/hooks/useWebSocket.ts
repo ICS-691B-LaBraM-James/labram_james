@@ -16,7 +16,17 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
   const wsRef = useRef<WebSocket | null>(null)
 
   const sendMessage = useCallback(
-    (message: string, file: File | null) => {
+    async (message: string, file: File | null) => {
+      let eegBuffer: ArrayBuffer | null = null
+      if (file) {
+        try {
+          eegBuffer = await file.arrayBuffer()
+        } catch {
+          onError('Failed to read EEG file')
+          return
+        }
+      }
+
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
       let finished = false
@@ -26,12 +36,11 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
           JSON.stringify({
             message,
             patient_metadata: {},
-            has_eeg: file !== null,
+            has_eeg: eegBuffer !== null,
           }),
         )
-
-        if (file) {
-          file.arrayBuffer().then((buf) => ws.send(buf))
+        if (eegBuffer) {
+          ws.send(eegBuffer)
         }
       }
 
@@ -71,10 +80,14 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
         onError('WebSocket connection error')
       }
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null
         if (!finished) {
-          onError('Connection closed before completion')
+          const detail =
+            event.code !== 1000 && event.code !== 1005
+              ? ` (WebSocket ${event.code}${event.reason ? `: ${event.reason}` : ''})`
+              : ''
+          onError(`Connection closed before completion${detail}`)
         }
       }
     },
