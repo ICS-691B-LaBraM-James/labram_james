@@ -1,6 +1,11 @@
-import argparse
 import sys
 from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(_PROJECT_ROOT / "LEAD"))
+
+
+import argparse
 from types import SimpleNamespace
 from typing import Dict, List, Sequence, Tuple
 
@@ -156,13 +161,23 @@ def _load_single_model(model_path: Path, device: torch.device, seq_len: int) -> 
 
 
 def load_models(checkpoint_root: Path, seed_folders: Sequence[str], device: torch.device, seq_len: int) -> List[torch.nn.Module]:
+    # --- DOCKER PATH CORRECTION ---
+    # If we are in Docker and the path looks like a Mac absolute path, redirect it to /app
+    root_str = str(checkpoint_root)
+    if "/Users/kyesteele/dev/labram_james/" in root_str:
+        checkpoint_root = Path(root_str.replace("/Users/kyesteele/dev/labram_james/", "/app/"))
+    elif root_str.startswith("/LEAD"):
+        checkpoint_root = Path("/app") / root_str.lstrip("/")
+    # ------------------------------
+
     models: List[torch.nn.Module] = []
     for folder in seed_folders:
         model_path = checkpoint_root / folder / "checkpoint.pth"
         if not model_path.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {model_path}")
+            # Final fallback: check if it's just in /app/LEAD/...
+            raise FileNotFoundError(f"Checkpoint not found at: {model_path}")
         models.append(_load_single_model(model_path, device=device, seq_len=seq_len))
-        print(f"[ok] Loaded checkpoint: {model_path}")
+        print(f"[ok] Loaded: {model_path}")
     return models
 
 

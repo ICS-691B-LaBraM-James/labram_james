@@ -41,31 +41,40 @@ class Orchestrator:
         self.client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=120.0)
 
     async def _build_messages(self, state: SessionState) -> list[dict]:
-        messages = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT.strip()}]
+            messages = [{"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT.strip()}]
 
-        if state.eeg_findings:
-            messages.append({
-                "role": "system",
-                "content": f"""
-EEG STRUCTURED DATA:
-{json.dumps(state.eeg_findings, indent=2)}
+            # Inject Patient Metadata into System Prompt if it exists
+            if state.patient_metadata and any(state.patient_metadata.values()):
+                meta = state.patient_metadata
+                hist = meta.get("history", {})
+                metadata_summary = (
+                    f"Patient Age: {meta.get('age', 'N/A')}, "
+                    f"Gender: {meta.get('gender', 'N/A')}, "
+                    f"History: {', '.join([k for k, v in hist.items() if v]) or 'None reported'}"
+                )
+                messages.append({
+                    "role": "system",
+                    "content": f"CRITICAL CLINICAL CONTEXT: {metadata_summary}. "
+                               "Please refine your interpretation of the EEG findings based on these factors. "
+                               "For example, increased theta/delta power is more significant for AD risk in older patients."
+                })
 
-You must base your reasoning on this data.
-"""
-            })
-            print(json.dumps(state.eeg_findings, indent=2))
-            logger.error(json.dumps(state.eeg_findings, indent=2))
+            if state.eeg_findings:
+                messages.append({
+                    "role": "system",
+                    "content": f"EEG STRUCTURED DATA:\n{json.dumps(state.eeg_findings, indent=2)}\n\nYou must base your reasoning on this data."
+                })
 
-        if getattr(state, "raw_pipeline_output", None):
-            messages.append({
-                "role": "system",
-                "content": f"Raw EEG pipeline output:\n{json.dumps(state.raw_pipeline_output)}"
-            })
+            if getattr(state, "raw_pipeline_output", None):
+                messages.append({
+                    "role": "system",
+                    "content": f"Raw EEG pipeline output:\n{json.dumps(state.raw_pipeline_output)}"
+                })
 
-        for entry in state.conversation_history:
-            messages.append({"role": entry["role"], "content": entry["content"]})
+            for entry in state.conversation_history:
+                messages.append({"role": entry["role"], "content": entry["content"]})
 
-        return messages
+            return messages
 
     def process_eeg(self, filepath):
         return run_inference_on_edf(

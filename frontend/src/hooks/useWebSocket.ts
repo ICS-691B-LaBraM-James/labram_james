@@ -16,7 +16,7 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
   const wsRef = useRef<WebSocket | null>(null)
 
   const sendMessage = useCallback(
-    (message: string, file: File | null) => {
+    (message: string, file: File | null, metadata: any) => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
 
@@ -24,7 +24,7 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
         ws.send(
           JSON.stringify({
             message,
-            patient_metadata: {},
+            patient_metadata: metadata,
             has_eeg: file !== null,
           }),
         )
