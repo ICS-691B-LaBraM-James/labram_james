@@ -78,21 +78,6 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
     }
   }, [])
 
-  const handleSend = async () => {
-    const text = input.trim()
-    if (!text || isLoading) return
-
-    addMessage('user', text)
-    addMessage('assistant', '')
-    setInput('')
-    setIsLoading(true)
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
-    const file = eegFile
-    await sendMessage(text, file)
-    onFileSelect(null)
-  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

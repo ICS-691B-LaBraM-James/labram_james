@@ -29,9 +29,9 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
             has_eeg: file !== null,
           }),
         )
-        if (eegBuffer) {
-          ws.send(eegBuffer)
-        }
+          if (file) {
+            ws.send(file)
+          }
       }
 
       ws.onmessage = (event) => {
