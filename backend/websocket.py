@@ -28,6 +28,13 @@ async def stream(ws: WebSocket):
     await ws.accept()
     state = create_initial_state()
 
+    async def safe_send(payload: dict):
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            # socket already closed — ignore
+            pass
+
     try:
         first_frame = await ws.receive_text()
         data = json.loads(first_frame)
@@ -52,10 +59,10 @@ async def stream(ws: WebSocket):
             eeg_bytes = await ws.receive_bytes()
 
         async def send_token(token: str):
-            await ws.send_json({"type": "token", "content": token})
+            await safe_send({"type": "token", "content": token})
 
         async def send_step(step: str, status: str):
-            await ws.send_json({"type": "step", "step": step, "status": status})
+            await safe_send({"type": "step", "step": step, "status": status})
 
         await orchestrator.stream_response(
             state,
@@ -66,18 +73,18 @@ async def stream(ws: WebSocket):
 
         # FINAL RESULTS (now safe)
         if state.eeg_findings:
-            await ws.send_json({
+            await safe_send({
                 "type": "findings",
                 "data": state.eeg_findings
             })
 
         if state.last_report:
-            await ws.send_json({
+            await safe_send({
                 "type": "report",
                 "data": state.last_report
             })
 
-        await ws.send_json({"type": "done"})
+        await safe_send({"type": "done"})
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")

@@ -5,6 +5,8 @@ from pydantic import BaseModel
 class PatientMetadata(BaseModel):
     age: str = ""
     sex: str = ""
+    mmse: str = ""
+    medications: str = ""
     symptoms: str = ""
     history: str = ""
 

@@ -16,17 +16,7 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
   const wsRef = useRef<WebSocket | null>(null)
 
   const sendMessage = useCallback(
-    async (message: string, file: File | null) => {
-      let eegBuffer: ArrayBuffer | null = null
-      if (file) {
-        try {
-          eegBuffer = await file.arrayBuffer()
-        } catch {
-          onError('Failed to read EEG file')
-          return
-        }
-      }
-
+    (message: string, file: File | null, metadata: any) => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
       let finished = false
@@ -35,8 +25,8 @@ export function useWebSocket({ onToken, onStep, onFindings, onReport, onComplete
         ws.send(
           JSON.stringify({
             message,
-            patient_metadata: {},
-            has_eeg: eegBuffer !== null,
+            patient_metadata: metadata,
+            has_eeg: file !== null,
           }),
         )
         if (eegBuffer) {
