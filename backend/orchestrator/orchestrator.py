@@ -85,17 +85,29 @@ class Orchestrator:
             # Inject Patient Metadata into System Prompt if it exists
             if state.patient_metadata and any(state.patient_metadata.values()):
                 meta = state.patient_metadata
-                hist = meta.get("history", {})
+                hist_raw = meta.get("history", "") or ""
+                if isinstance(hist_raw, str):
+                    try:
+                        hist = json.loads(hist_raw) if hist_raw else {}
+                    except (json.JSONDecodeError, TypeError):
+                        hist = {}
+                else:
+                    hist = hist_raw if isinstance(hist_raw, dict) else {}
+                history_str = ", ".join(k for k, v in hist.items() if v) or "None reported"
                 metadata_summary = (
-                    f"Patient Age: {meta.get('age', 'N/A')}, "
-                    f"Gender: {meta.get('gender', 'N/A')}, "
-                    f"History: {', '.join([k for k, v in hist.items() if v]) or 'None reported'}"
+                    f"Age: {meta.get('age') or 'N/A'}, "
+                    f"Sex: {meta.get('sex') or 'N/A'}, "
+                    f"MMSE: {meta.get('mmse') or 'not assessed'}, "
+                    f"Reported Symptoms: {meta.get('symptoms') or 'none reported'}, "
+                    f"Current Medications: {meta.get('medications') or 'none reported'}, "
+                    f"Recording State: {meta.get('recording_state') or 'unspecified'}, "
+                    f"Clinical Indications: {history_str}"
                 )
                 messages.append({
                     "role": "system",
                     "content": f"CRITICAL CLINICAL CONTEXT: {metadata_summary}. "
-                               "Please refine your interpretation of the EEG findings based on these factors. "
-                               "For example, increased theta/delta power is more significant for AD risk in older patients."
+                               "Use these fields when responding to the user's questions and when interpreting any EEG findings. "
+                               "If the user asks about a medication, symptom, or test listed above, treat it as already supplied — do NOT ask them to specify what they already provided."
                 })
 
             if state.eeg_findings:
