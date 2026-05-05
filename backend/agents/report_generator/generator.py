@@ -43,6 +43,7 @@ def generate_report(
     mmse = clean(patient_metadata.get("mmse"), "Not assessed")
     medications = normalize_list_field(patient_metadata.get("medications"))
     symptoms = clean(patient_metadata.get("symptoms"), "None reported")
+    recording_state = clean(patient_metadata.get("recording_state"), "Not specified")
 
     try:
         raw_history = patient_metadata.get("history", "{}")
@@ -78,6 +79,7 @@ def generate_report(
             mmse=mmse,
             medications=medications,
             symptoms=symptoms,
+            recording_state=recording_state,
             history=history_str,
             user_notes=user_notes.strip() or "No clinician notes provided.",
             ad_probability=findings.ad_risk_score,

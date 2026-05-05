@@ -8,6 +8,7 @@ class PatientMetadata(BaseModel):
     mmse: str = ""
     medications: str = ""
     symptoms: str = ""
+    recording_state: str = ""
     history: str = ""
 
 
