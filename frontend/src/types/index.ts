@@ -4,6 +4,12 @@ export interface PipelineStep {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+export interface MessageAttachments {
+  fileName?: string
+  vitals?: Array<{ label: string; value: string }>
+  notes?: Array<{ label: string; value: string }>
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -12,6 +18,7 @@ export interface Message {
   steps?: PipelineStep[]
   findings?: EEGFindings | null
   report?: string | null
+  attachments?: MessageAttachments
 }
 
 export interface BandPower {

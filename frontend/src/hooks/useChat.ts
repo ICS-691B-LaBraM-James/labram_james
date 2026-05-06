@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { Message, EEGFindings, PipelineStep } from '../types'
+import type { Message, EEGFindings, PipelineStep, MessageAttachments } from '../types'
 
 const STEP_LABELS: Record<string, string> = {
   eeg_processing: 'Processing EEG',
@@ -30,12 +30,17 @@ export function useChat() {
     }
   }, [messages])
 
-  const addMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+  const addMessage = useCallback((
+    role: 'user' | 'assistant',
+    content: string,
+    attachments?: MessageAttachments,
+  ) => {
     const msg: Message = {
       id: crypto.randomUUID(),
       role,
       content,
       timestamp: new Date(),
+      ...(attachments ? { attachments } : {}),
     }
     setMessages((prev) => [...prev, msg])
   }, [])

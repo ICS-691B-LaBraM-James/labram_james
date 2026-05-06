@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { EEGFindings } from '../types'
+import type { MessageAttachments } from '../types'
 import { useChat } from '../hooks/useChat'
 import { useWebSocket } from '../hooks/useWebSocket'
 import MessageBubble from './MessageBubble'
@@ -79,13 +79,6 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
   }, [])
 
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
   const handlePromptClick = (prompt: string) => {
     setInput(prompt)
     setTimeout(() => {
@@ -98,22 +91,33 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
     const text = input.trim()
     if ((!text && !eegFile) || isLoading) return
 
+    const query = text || 'Analyze clinical EEG signal';
+
     const presentIndications = Object.entries(metadata.history)
-      .filter(([_, present]) => present)
-      .map(([key]) => key.replace(/([A-Z])/g, ' $1').toLowerCase())
-      .join(", ");
+      .filter(([, present]) => present)
+      .map(([key]) => key.replace(/([A-Z])/g, ' $1').toLowerCase().trim())
+      .join(', ');
 
-    const auditTrail = `
-**FILE:** ${eegFile ? eegFile.name : 'None'}
-**CONTEXT:** ${metadata.age}y ${metadata.sex} | MMSE: ${metadata.mmse}
-**SYMPTOMS:** ${metadata.symptoms || 'None reported'}
-**MEDICATIONS:** ${metadata.medications || 'None reported'}
-**INDICATIONS:** ${presentIndications || 'None'}
+    const vitals: NonNullable<MessageAttachments['vitals']> = [];
+    if (metadata.age?.trim()) vitals.push({ label: 'Age', value: metadata.age.trim() });
+    if (metadata.sex?.trim()) vitals.push({ label: 'Sex', value: metadata.sex.trim() });
+    if (metadata.mmse?.trim()) vitals.push({ label: 'MMSE', value: metadata.mmse.trim() });
 
-**QUERY:** ${text || 'Analyze clinical EEG signal'}
-    `.trim();
+    const notes: NonNullable<MessageAttachments['notes']> = [];
+    if (metadata.symptoms?.trim()) notes.push({ label: 'Symptoms', value: metadata.symptoms.trim() });
+    if (metadata.medications?.trim()) notes.push({ label: 'Medications', value: metadata.medications.trim() });
+    if (presentIndications) notes.push({ label: 'Indications', value: presentIndications });
 
-    addMessage('user', auditTrail);
+    const attachments: MessageAttachments = {};
+    if (eegFile) attachments.fileName = eegFile.name;
+    if (vitals.length > 0) attachments.vitals = vitals;
+    if (notes.length > 0) attachments.notes = notes;
+    const hasAttachments =
+      Boolean(attachments.fileName) ||
+      (attachments.vitals?.length ?? 0) > 0 ||
+      (attachments.notes?.length ?? 0) > 0;
+
+    addMessage('user', query, hasAttachments ? attachments : undefined);
     addMessage('assistant', '');
     setInput('');
     setIsLoading(true);
