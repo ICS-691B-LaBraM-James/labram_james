@@ -12,20 +12,14 @@ services:
       - backend
 
   backend:
-    build: 
-      context: .
-      dockerfile: backend/Dockerfile
+    build: ./backend
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - ./third_party/LEAD:/app/third_party/LEAD
       - ./data:/app/data
-      # MOUNT THE SIBLING FOLDER HERE
-      - ./LEAD:/app/LEAD
     env_file:
       - .env
-    environment:
-      - PYTHONPATH=/app:/app/LEAD
     extra_hosts:
       - "host.docker.internal:host-gateway"

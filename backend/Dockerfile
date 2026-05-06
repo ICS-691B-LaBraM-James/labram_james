@@ -9,9 +9,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-# CHANGED: Look in backend/ folder for requirements
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install torch torchvision torchaudio
 RUN pip install braindecode
