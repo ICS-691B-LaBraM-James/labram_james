@@ -29,19 +29,31 @@ CHANNEL_ALIASES: Dict[str, str] = {
 
 def _canonical_name(ch_name: str) -> str:
     name = ch_name.strip()
+    
+    # 1. Strip Prefixes
     for prefix in ("EEG ", "EEG-", "EEG_"):
         if name.upper().startswith(prefix.strip().upper()):
             name = name[len(prefix):]
             break
-    for suffix in ("-REF", "-LE", "-RE", "_REF", "_LE", "_RE"):
-        if name.upper().endswith(suffix):
+            
+    # 2. Strip Suffixes (Added -AVG here)
+    # We convert to upper for the check, but slice the original string
+    suffixes = ("-REF", "-LE", "-RE", "_REF", "_LE", "_RE", "-AVG", "_AVG")
+    name_upper = name.upper()
+    for suffix in suffixes:
+        if name_upper.endswith(suffix):
             name = name[: -len(suffix)]
             break
+    
+    # 3. Clean remaining whitespace
     name = name.replace(" ", "")
+    
+    # 4. Handle Aliases (T3 -> T7, etc.)
     upper_name = name.upper()
     for alias, replacement in CHANNEL_ALIASES.items():
         if upper_name == alias:
             return replacement
+            
     return name
 
 def _build_model_config(seq_len: int, num_class: int = 2) -> SimpleNamespace:
@@ -67,25 +79,44 @@ def _load_single_model(model_path: Path, device: torch.device, seq_len: int) -> 
 def preprocess_edf(edf_path: Path, target_fs: int = 200, low_cut: float = 0.5, 
                    high_cut: float = 45.0, notch: float = 50.0, use_avg_ref: bool = True) -> Tuple[np.ndarray, int]:
     raw = mne.io.read_raw_edf(str(edf_path), preload=True, verbose="ERROR")
+    
+    # 1. Normalize current names
     raw.rename_channels({ch: _canonical_name(ch) for ch in raw.ch_names})
+    
     if notch and notch > 0: raw.notch_filter(freqs=[notch], verbose="ERROR")
     raw.filter(l_freq=low_cut, h_freq=high_cut, verbose="ERROR")
     if use_avg_ref: raw.set_eeg_reference(ref_channels="average", projection=False, verbose="ERROR")
 
-    # Case-insensitive matching and zero-padding
+    # 2. Match with TARGET_CHANNELS
     current_ch_upper = {ch.upper(): ch for ch in raw.ch_names}
     found_ordered = [current_ch_upper[t.upper()] for t in TARGET_CHANNELS if t.upper() in current_ch_upper]
     
+    # --- FIX STARTS HERE ---
+    if not found_ordered:
+        raise ValueError(
+            f"No matching EEG channels found. \n"
+            f"Target: {TARGET_CHANNELS}\n"
+            f"Found in File (after cleaning): {raw.ch_names}"
+        )
+
+    # Pick only what we found
     raw.pick(found_ordered)
+    # --- FIX ENDS HERE ---
+
     raw.reorder_channels(found_ordered)
     raw.resample(sfreq=target_fs, verbose="ERROR")
     
     data = raw.get_data()
+    # Create an empty matrix of zeros for all 19 channels
     full_matrix = np.zeros((len(TARGET_CHANNELS), data.shape[1]), dtype=np.float32)
+    
+    # Map the data we DID find into the correct rows of the 19-channel matrix
     for i, target in enumerate(TARGET_CHANNELS):
         if target.upper() in current_ch_upper:
+            # Find which index in 'data' corresponds to this target
             src_idx = found_ordered.index(current_ch_upper[target.upper()])
             full_matrix[i, :] = data[src_idx, :]
+            
     return full_matrix.T, int(target_fs)
 
 def segment_signal(data_tc: np.ndarray, seq_len: int = 400, step: int = 200) -> np.ndarray:
