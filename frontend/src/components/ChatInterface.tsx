@@ -78,6 +78,10 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
     }
   }, [])
 
+  const handleClearForm = () => {
+    setMetadata(INITIAL_METADATA);
+    localStorage.removeItem('eeg_metadata');
+  }
 
   const handlePromptClick = (prompt: string) => {
     setInput(prompt)
@@ -140,8 +144,9 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
   }
 
   const handleNewChat = () => {
-    clearMessages(); setMetadata(INITIAL_METADATA);
-    localStorage.removeItem('eeg_metadata'); setShowMetadataForm(true);
+    clearMessages(); 
+    handleClearForm();
+    setShowMetadataForm(true);
   }
 
   const isEmpty = messages.length === 0
@@ -158,9 +163,22 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
           </div>
           <span className="text-sm font-medium text-white/90">EEG Interpreter</span>
         </div>
-        {messages.length > 0 && (
-          <button onClick={handleNewChat} className="text-xs text-white/40 hover:text-white/70 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">New chat</button>
-        )}
+        
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowMetadataForm(!showMetadataForm)}
+            className={`text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors border ${
+              showMetadataForm 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70'
+            }`}
+          >
+            {showMetadataForm ? 'Hide Clinical Info' : 'Show Clinical Info'}
+          </button>
+          {messages.length > 0 && (
+            <button onClick={handleNewChat} className="text-xs text-white/40 hover:text-white/70 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">New chat</button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -196,7 +214,17 @@ function ChatInterface({ eegFile, onFileSelect }: Props) {
       <div className="border-t border-white/10 bg-[#0f0f0f] pb-6">
         <div className="max-w-3xl mx-auto px-4">
           {showMetadataForm && (
-            <div className="mb-4 mt-4 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div className="mb-4 mt-4 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 relative">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Patient Context</span>
+                <button 
+                  onClick={handleClearForm}
+                  className="text-[10px] text-white/30 hover:text-red-400/80 transition-colors uppercase font-bold"
+                >
+                  Clear Form
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <input type="number" placeholder="Age" className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50" value={metadata.age} onChange={(e) => setMetadata({...metadata, age: e.target.value})} />
                 <select className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" value={metadata.sex} onChange={(e) => setMetadata({...metadata, sex: e.target.value})}>
